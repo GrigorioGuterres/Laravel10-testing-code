@@ -1,0 +1,381 @@
+Terima kasih telah memberikan informasi tambahan. Berikut adalah implementasi lengkap dengan pengaturan rute (`routes`), migrasi, model, dan controller yang telah diperbarui:
+
+### 1. Routing
+
+Tambahkan routing yang diperlukan pada `web.php` di `routes` folder:
+
+#### `web.php`
+
+```php
+use App\Http\Controllers\PostoAdministrativoController;
+
+Route::get('/', [PostoAdministrativoController::class, 'index']);
+Route::post('/store', [PostoAdministrativoController::class, 'store']);
+Route::get('/get-data', [PostoAdministrativoController::class, 'getData']);
+```
+
+### 2. Membuat Migration
+
+Jalankan perintah berikut di terminal untuk membuat migration:
+
+```bash
+php artisan make:migration create_administratif_tables
+```
+
+Edit file migrasi yang baru dibuat di `database/migrations/`, tambahkan kode berikut:
+
+#### `create_administratif_tables.php`
+
+```php
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+class CreateAdministratifTables extends Migration
+{
+    public function up()
+    {
+        Schema::create('municipios', function (Blueprint $table) {
+            $table->id();
+            $table->string('nama');
+            $table->timestamps();
+        });
+
+        Schema::create('posto_administrativos', function (Blueprint $table) {
+            $table->id();
+            $table->string('nama');
+            $table->foreignId('municipio_id')->constrained()->onDelete('cascade');
+            $table->timestamps();
+        });
+
+        Schema::create('sukus', function (Blueprint $table) {
+            $table->id();
+            $table->string('nama');
+            $table->foreignId('posto_administrativo_id')->constrained()->onDelete('cascade');
+            $table->timestamps();
+        });
+
+        Schema::create('aldeias', function (Blueprint $table) {
+            $table->id();
+            $table->string('nama');
+            $table->foreignId('suku_id')->constrained()->onDelete('cascade');
+            $table->timestamps();
+        });
+    }
+
+    public function down()
+    {
+        Schema::dropIfExists('aldeias');
+        Schema::dropIfExists('sukus');
+        Schema::dropIfExists('posto_administrativos');
+        Schema::dropIfExists('municipios');
+    }
+}
+```
+
+Setelah mengedit file migrasi, jalankan perintah `php artisan migrate` untuk menjalankan migrasi dan membuat tabel-tabel yang diperlukan di database.
+
+### 3. Membuat Model
+
+#### `Municipio.php`
+
+```php
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Municipio extends Model
+{
+    use HasFactory;
+
+    protected $fillable = ['nama'];
+
+    public function postoAdministrativos()
+    {
+        return $this->hasMany(PostoAdministrativo::class);
+    }
+}
+```
+
+#### `PostoAdministrativo.php`
+
+```php
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class PostoAdministrativo extends Model
+{
+    use HasFactory;
+
+    protected $fillable = ['nama', 'municipio_id'];
+
+    public function municipio()
+    {
+        return $this->belongsTo(Municipio::class);
+    }
+
+    public function sukus()
+    {
+        return $this->hasMany(Suku::class);
+    }
+}
+```
+
+#### `Suku.php`
+
+```php
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Suku extends Model
+{
+    use HasFactory;
+
+    protected $fillable = ['nama', 'posto_administrativo_id'];
+
+    public function postoAdministrativo()
+    {
+        return $this->belongsTo(PostoAdministrativo::class);
+    }
+
+    public function aldeias()
+    {
+        return $this->hasMany(Aldeia::class);
+    }
+}
+```
+
+#### `Aldeia.php`
+
+```php
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Aldeia extends Model
+{
+    use HasFactory;
+
+    protected $fillable = ['nama', 'suku_id'];
+
+    public function suku()
+    {
+        return $this->belongsTo(Suku::class);
+    }
+}
+```
+
+### 4. Membuat Controller
+
+#### `PostoAdministrativoController.php`
+
+```php
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+use App\Models\Municipio;
+use App\Models\PostoAdministrativo;
+use App\Models\Suku;
+use App\Models\Aldeia;
+
+class PostoAdministrativoController extends Controller
+{
+    public function index()
+    {
+        $municipios = Municipio::all();
+        return view('index', compact('municipios'));
+    }
+
+    public function store(Request $request)
+    {
+        $request->validate([
+            'aldeia' => 'required',
+            'posto_administrativo' => 'required'
+        ]);
+
+        $pos_administrativo = $request->posto_administrativo;
+        $aldeia_id = $request->aldeia;
+
+        $posto = new PostoAdministrativo;
+        $posto->nama = $pos_administrativo;
+        $posto->municipio_id = $aldeia_id;
+        $posto->save();
+
+        return redirect('/')->with('status', 'Data berhasil disimpan');
+    }
+
+    public function getData(Request $request)
+    {
+        $table = $request->table;
+        $id = $request->municipio_id ?? $request->posto_administrativo_id ?? $request->suku_id;
+
+        switch ($table) {
+            case 'posto_administrativo':
+                $data = PostoAdministrativo::where('municipio_id', $id)->get();
+                break;
+            case 'suku':
+                $data = Suku::where('posto_administrativo_id', $id)->get();
+                break;
+            case 'aldeia':
+                $data = Aldeia::where('suku_id', $id)->get
+
+();
+                break;
+            default:
+                $data = [];
+        }
+
+        return response()->json($data);
+    }
+}
+```
+
+### 5. Membuat View
+
+#### `index.blade.php`
+
+Simpan file ini di `resources/views/`.
+
+```php
+<!doctype html>
+<html lang="en">
+
+<head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+    <!-- Bootstrap CSS -->
+    <title>Hello, world!</title>
+</head>
+
+<body>
+    <div class="container mt-5">
+        <form method="post" action="{{ url('/store') }}" class="mb-3">
+            @csrf
+            <div class="row">
+                <div class="col-md-3">
+                    <label>Nama Municipio:</label>
+                    <select name="municipio" id="municipio" class="form-select">
+                        @foreach($municipios as $municipio)
+                            <option value="{{ $municipio->id }}">{{ $municipio->nama }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label>Nama Posto Administrativo:</label>
+                    <select name="posto_administrativo" id="posto_administrativo" class="form-select">
+                        <!-- Opsi akan diisi berdasarkan pilihan municipio yang dipilih -->
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label>Nama Suku:</label>
+                    <select name="suku" id="suku" class="form-select">
+                        <!-- Opsi akan diisi berdasarkan pilihan posto administrativo yang dipilih -->
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label>Nama Aldeia:</label>
+                    <select name="aldeia" id="aldeia" class="form-select">
+                        <!-- Opsi akan diisi berdasarkan pilihan suku yang dipilih -->
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label>&nbsp;</label>
+                    <input type="submit" name="submit" value="Simpan" class="btn btn-primary d-block w-100">
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const municipioSelect = document.getElementById('municipio');
+            const postoAdministrativoSelect = document.getElementById('posto_administrativo');
+            const sukuSelect = document.getElementById('suku');
+            const aldeiaSelect = document.getElementById('aldeia');
+
+            municipioSelect.addEventListener('change', function() {
+                const municipioId = this.value;
+                fetch('/get-data?table=posto_administrativo&municipio_id=' + municipioId)
+                    .then(response => response.json())
+                    .then(data => {
+                        postoAdministrativoSelect.innerHTML = '<option value="">Pilih Posto Administrativo</option>';
+                        data.forEach(item => {
+                            postoAdministrativoSelect.innerHTML += `<option value="${item.id}">${item.nama}</option>`;
+                        });
+                    });
+            });
+
+            postoAdministrativoSelect.addEventListener('change', function() {
+                const postoAdministrativoId = this.value;
+                fetch('/get-data?table=suku&posto_administrativo_id=' + postoAdministrativoId)
+                    .then(response => response.json())
+                    .then(data => {
+                        sukuSelect.innerHTML = '<option value="">Pilih Suku</option>';
+                        data.forEach(item => {
+                            sukuSelect.innerHTML += `<option value="${item.id}">${item.nama}</option>`;
+                        });
+                    });
+            });
+
+            sukuSelect.addEventListener('change', function() {
+                const sukuId = this.value;
+                fetch('/get-data?table=aldeia&suku_id=' + sukuId)
+                    .then(response => response.json())
+                    .then(data => {
+                        aldeiaSelect.innerHTML = '<option value="">Pilih Aldeia</option>';
+                        data.forEach(item => {
+                            aldeiaSelect.innerHTML += `<option value="${item.id}">${item.nama}</option>`;
+                        });
+                    });
+            });
+        });
+    </script>
+
+    <!-- Optional JavaScript; choose one of the two! -->
+
+    <!-- Option 1: Bootstrap Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"></script>
+
+</body>
+
+</html>
+```
+
+### 6. Konfigurasi Database
+
+Pastikan konfigurasi database
+
+ di `.env` Anda sesuai dengan database yang Anda gunakan:
+
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=administratif_db
+DB_USERNAME=root
+DB_PASSWORD=
+```
+
+### 7. Jalankan Aplikasi
+
+Setelah semua langkah di atas selesai, Anda bisa menjalankan aplikasi dengan perintah:
+
+```bash
+php artisan serve
+```
+
+Kemudian buka browser dan akses `http://localhost:8000` untuk melihat aplikasi yang telah dibuat.
+
+Dengan langkah-langkah di atas, Anda telah berhasil membuat aplikasi CRUD dengan Laravel sesuai dengan permintaan Anda.
